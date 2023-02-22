@@ -1,0 +1,10 @@
+[package]
+name = "framework"
+version = "0.1.0"
+edition = "2021"
+authors = ["HK416 <powerspirit127@gmail.com>"]
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[dependencies]

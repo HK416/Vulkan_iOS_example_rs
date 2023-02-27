@@ -8,17 +8,35 @@
 
 /* Begin PBXBuildFile section */
 		9504B07029A5E78500334DEE /* libframework.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9504B06F29A5E78500334DEE /* libframework.a */; settings = {ATTRIBUTES = (Required, ); }; };
+		9523E66729A74F27003B77C7 /* MoltenVK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9523E66629A74F27003B77C7 /* MoltenVK.xcframework */; };
+		9523E66829A74F27003B77C7 /* MoltenVK.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 9523E66629A74F27003B77C7 /* MoltenVK.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		9523E66A29A74F3F003B77C7 /* MoltenVK.xcframework in Resources */ = {isa = PBXBuildFile; fileRef = 9523E66629A74F27003B77C7 /* MoltenVK.xcframework */; };
 		95E73F8529A5D834004AC358 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 95E73F8429A5D834004AC358 /* AppDelegate.m */; };
 		95E73F8829A5D834004AC358 /* SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 95E73F8729A5D834004AC358 /* SceneDelegate.m */; };
 		95E73F8B29A5D834004AC358 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 95E73F8A29A5D834004AC358 /* ViewController.m */; };
 		95E73F8E29A5D834004AC358 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 95E73F8C29A5D834004AC358 /* Main.storyboard */; };
 		95E73F9029A5D835004AC358 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 95E73F8F29A5D835004AC358 /* Assets.xcassets */; };
 		95E73F9329A5D835004AC358 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 95E73F9129A5D835004AC358 /* LaunchScreen.storyboard */; };
-		95E73F9629A5D835004AC358 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 95E73F9529A5D835004AC358 /* main.m */; };
+		95E73F9629A5D835004AC358 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 95E73F9529A5D835004AC358 /* main.mm */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		9523E66929A74F27003B77C7 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				9523E66829A74F27003B77C7 /* MoltenVK.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		9504B06F29A5E78500334DEE /* libframework.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libframework.a; path = ../framework/target/libframework.a; sourceTree = "<group>"; };
+		9523E66629A74F27003B77C7 /* MoltenVK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MoltenVK.xcframework; path = VulkanExample00/Bundles/Frameworks/MoltenVK.xcframework; sourceTree = "<group>"; };
 		95E73F8029A5D834004AC358 /* VulkanExample00.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VulkanExample00.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		95E73F8329A5D834004AC358 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		95E73F8429A5D834004AC358 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -30,7 +48,7 @@
 		95E73F8F29A5D835004AC358 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		95E73F9229A5D835004AC358 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		95E73F9429A5D835004AC358 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		95E73F9529A5D835004AC358 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		95E73F9529A5D835004AC358 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		95E73F9C29A5DD46004AC358 /* framework.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = framework.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -40,6 +58,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9504B07029A5E78500334DEE /* libframework.a in Frameworks */,
+				9523E66729A74F27003B77C7 /* MoltenVK.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -49,6 +68,7 @@
 		9504B06E29A5E78500334DEE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				9523E66629A74F27003B77C7 /* MoltenVK.xcframework */,
 				9504B06F29A5E78500334DEE /* libframework.a */,
 			);
 			name = Frameworks;
@@ -84,7 +104,7 @@
 				95E73F8F29A5D835004AC358 /* Assets.xcassets */,
 				95E73F9129A5D835004AC358 /* LaunchScreen.storyboard */,
 				95E73F9429A5D835004AC358 /* Info.plist */,
-				95E73F9529A5D835004AC358 /* main.m */,
+				95E73F9529A5D835004AC358 /* main.mm */,
 				95E73F9C29A5DD46004AC358 /* framework.h */,
 			);
 			path = VulkanExample00;
@@ -101,6 +121,7 @@
 				95E73F7C29A5D834004AC358 /* Sources */,
 				95E73F7D29A5D834004AC358 /* Frameworks */,
 				95E73F7E29A5D834004AC358 /* Resources */,
+				9523E66929A74F27003B77C7 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -148,6 +169,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9523E66A29A74F3F003B77C7 /* MoltenVK.xcframework in Resources */,
 				95E73F9329A5D835004AC358 /* LaunchScreen.storyboard in Resources */,
 				95E73F9029A5D835004AC358 /* Assets.xcassets in Resources */,
 				95E73F8E29A5D834004AC358 /* Main.storyboard in Resources */,
@@ -185,7 +207,7 @@
 			files = (
 				95E73F8B29A5D834004AC358 /* ViewController.m in Sources */,
 				95E73F8529A5D834004AC358 /* AppDelegate.m in Sources */,
-				95E73F9629A5D835004AC358 /* main.m in Sources */,
+				95E73F9629A5D835004AC358 /* main.mm in Sources */,
 				95E73F8829A5D834004AC358 /* SceneDelegate.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

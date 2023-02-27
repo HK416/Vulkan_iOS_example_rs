@@ -9,6 +9,8 @@
 
 @interface SceneDelegate : UIResponder <UIWindowSceneDelegate>
 
+@property (strong, nonatomic) UIViewController * viewController;
+
 @property (strong, nonatomic) UIWindow * window;
 
 @end

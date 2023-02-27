@@ -8,3 +8,5 @@ authors = ["HK416 <powerspirit127@gmail.com>"]
 crate-type = ["lib", "staticlib"]
 
 [dependencies]
+objc = "0.2"
+vulkano = "0.32"

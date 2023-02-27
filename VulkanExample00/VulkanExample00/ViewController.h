@@ -9,6 +9,18 @@
 
 @interface ViewController : UIViewController
 
+- (void)destroyFramework;
+
+- (void)pausedFramework;
+
+- (void)resumeFramework;
 
 @end
 
+
+#pragma mark - AppView
+
+@interface AppView : UIView
+
+
+@end

@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+mod timer;
 mod renderer;
 mod framework;
 

@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 use std::fmt::Debug;
 use std::ffi::c_void;
+use crate::timer::Timer;
 use crate::renderer::Renderer;
 
 
@@ -26,6 +27,7 @@ where T: Debug + Clone + Copy + PartialEq {
 
 pub struct Framework {
     renderer: Renderer,
+    timer: Timer,
 }
 
 impl Framework {
@@ -38,21 +40,26 @@ impl Framework {
     ) -> Result<Self, String> {
         Ok(Self { 
             renderer: Renderer::new_ios_ver(view, scale, screen_size)?,
+            timer: Timer::new(),
         })
     }
 
     pub fn frame_advanced(&mut self) -> Result<(), String> {
+        self.timer.tick(None);
         self.renderer.draw(0.411765, 0.411765, 0.411765)?;
+        println!("frame rate:{}", self.timer.get_frame_rate());
         Ok(())
     }
 
     pub fn paused(&mut self) -> Result<(), String> {
+        self.timer.pause();
         println!("paused");
         Ok(())
     }
 
     pub fn resume(&mut self) -> Result<(), String> {
-        println!("resume!");
+        let elapsed_time = self.timer.resume();
+        println!("resume (elapsed time: {}sec)", elapsed_time);
         Ok(())
     }
 }

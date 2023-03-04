@@ -21,8 +21,6 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    self.view.contentScaleFactor = UIScreen.mainScreen.nativeScale;
-    
     SceneDelegate *sceneDelegate = (SceneDelegate*)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject.delegate;
     sceneDelegate.viewController = self;
     
@@ -36,7 +34,7 @@
     
         char buf[MAX_MSG_BUF_SIZE];
         memset((void*)&buf[0], 0, sizeof(char) * MAX_MSG_BUF_SIZE);
-        getLastFrameworkErrMsg(&buf[0], MAX_MSG_BUF_SIZE);
+        getLastErrorMessage(&buf[0], MAX_MSG_BUF_SIZE);
         
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Framework Error"
                                                          message:[NSString stringWithUTF8String:buf]
@@ -62,14 +60,13 @@
     
     CGRect screenSize = UIScreen.mainScreen.nativeBounds;
     UIEdgeInsets safeArea = self.view.window.safeAreaInsets;
-    float scale = (float)UIScreen.mainScreen.nativeScale;
     unsigned int screenWidth = (unsigned int)screenSize.size.width;
     unsigned int screenHeight = (unsigned int)screenSize.size.height;
     int viewerTop = (int)safeArea.top;
     int viewerLeft = (int)safeArea.left;
     int viewerBottom = (int)safeArea.bottom;
     int viewerRight = (int)safeArea.right;
-    _framework = createFramework((__bridge void*)self.view, scale, screenWidth, screenHeight, viewerTop, viewerLeft, viewerBottom, viewerRight);
+    _framework = createFramework((__bridge void*)self.view, screenWidth, screenHeight, viewerTop, viewerLeft, viewerBottom, viewerRight);
     _frameworkStandby = YES;
     [self handleErrorMessage];
     

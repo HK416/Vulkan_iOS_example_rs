@@ -1,20 +1,24 @@
 #![allow(unused_imports)]
+mod math;
+mod mesh;
 mod timer;
+mod error;
 mod renderer;
 mod framework;
 
 use std::ptr;
 use std::ffi::{c_void, c_char};
-use framework::{Framework, Extent2D, Rect};
 
-static mut LAST_FRAMEWORK_ERR_MSG: Option<String> = None;
+use error::RuntimeError;
+use renderer::AppHandle;
+use framework::Framework;
 
+static mut LAST_FRAMEWORK_ERR_MSG: Option<RuntimeError> = None;
 
 #[no_mangle]
 #[cfg(target_os = "ios")]
 pub extern "C" fn createFramework(
-    view: *mut c_void,
-    scale: f32,
+    ui_view: *mut c_void,
     screen_width: u32,
     screen_height: u32,
     viewer_top: i32,
@@ -22,11 +26,11 @@ pub extern "C" fn createFramework(
     viewer_bottom: i32,
     viewer_right: i32,
 ) -> *mut c_void {
-    assert!(!view.is_null(), "view cannot be a null pointer.");
-    assert!(scale > 0.0, "scale must be greater than zero.");
-    let screen_size = Extent2D { width: screen_width, height: screen_height };
-    let viewer_area = Rect { top: viewer_top, left: viewer_left, bottom: viewer_bottom, right: viewer_right };
-    return match Framework::new_ios_ver(view, scale, screen_size, viewer_area) {
+    assert!(!ui_view.is_null(), "view cannot be a null pointer.");
+    let handle = AppHandle::IOS { ui_view: unsafe { std::mem::transmute(ui_view) } };
+    let screen_size = (screen_width, screen_height);
+    let viewer_area = (viewer_top, viewer_left, viewer_bottom, viewer_right);
+    return match Framework::new(handle, Some(screen_size), Some(viewer_area)) {
         Ok(framework) => {
             Box::into_raw(Box::new(framework)) as *mut c_void
         },
@@ -88,7 +92,20 @@ pub extern "C" fn getLastFrameworkErrMsg(buf: *mut c_char, buf_size: u32) -> boo
     assert!(buf_size > 0, "buffer size cannot be zero.");
     return match unsafe { &LAST_FRAMEWORK_ERR_MSG } {
         Some(msg) => {
-            unsafe { buf.copy_from(msg.as_ptr() as *const i8, buf_size as usize) };
+            unsafe { buf.copy_from(msg.what().as_ptr() as *const i8, buf_size as usize) };
+            true
+        },
+        None => false
+    };
+}
+
+#[no_mangle]
+pub extern "C" fn getLastFrameworkErrMsgDbg(buf: *mut c_char, buf_size: u32) -> bool {
+    assert!(!buf.is_null(), "buffer cannot be a null pointer.");
+    assert!(buf_size > 0, "buffer size cannot be zero.");
+    return match unsafe { &LAST_FRAMEWORK_ERR_MSG } {
+        Some(msg) => {
+            unsafe { buf.copy_from(msg.debug_info().as_ptr() as *const i8, buf_size as usize) };
             true
         },
         None => false

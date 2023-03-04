@@ -2,62 +2,50 @@
 use std::fmt::Debug;
 use std::ffi::c_void;
 use crate::timer::Timer;
-use crate::renderer::Renderer;
-
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Extent2D<T>
-where T: Debug + Clone + Copy + PartialEq {
-    pub width: T,
-    pub height: T,
-}
-
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Rect<T> 
-where T: Debug + Clone + Copy + PartialEq {
-    pub top: T,
-    pub left: T,
-    pub bottom: T,
-    pub right: T,
-}
+use crate::error::RuntimeError;
+use crate::renderer::{rgb, Renderer, AppHandle};
 
 
 pub struct Framework {
     renderer: Renderer,
     timer: Timer,
+    viewer_area: Option<(i32, i32, i32, i32)>,
 }
 
 impl Framework {
-    #[cfg(target_os = "ios")]
-    pub fn new_ios_ver(
-        view: *mut c_void, 
-        scale: f32,
-        screen_size: Extent2D<u32>,
-        viewer_area: Rect<i32>,
-    ) -> Result<Self, String> {
-        Ok(Self { 
-            renderer: Renderer::new_ios_ver(view, scale, screen_size)?,
-            timer: Timer::new(),
+    pub fn new(
+        handle: AppHandle, 
+        screen_size: Option<(u32, u32)>,
+        viewer_area: Option<(i32, i32, i32, i32)>
+    ) -> Result<Self, RuntimeError> {
+        let renderer = Renderer::new(handle, screen_size)?;
+        let timer = Timer::new();
+        Ok(Self {
+            renderer,
+            timer,
+            viewer_area, 
         })
     }
 
-    pub fn frame_advanced(&mut self) -> Result<(), String> {
+    pub fn frame_advanced(&mut self) -> Result<(), RuntimeError> {
         self.timer.tick(None);
-        self.renderer.draw(0.411765, 0.411765, 0.411765)?;
+
+        let (red, green, blue) = rgb(128, 128, 128);
+        if let Some(guard) = self.renderer.prepare_render(red, green, blue, 1.0)? {
+            self.renderer.submit_and_present(guard)?;
+        }
+
         println!("frame rate:{}", self.timer.get_frame_rate());
         Ok(())
     }
 
-    pub fn paused(&mut self) -> Result<(), String> {
+    pub fn paused(&mut self) -> Result<(), RuntimeError> {
         self.timer.pause();
         println!("paused");
         Ok(())
     }
 
-    pub fn resume(&mut self) -> Result<(), String> {
+    pub fn resume(&mut self) -> Result<(), RuntimeError> {
         let elapsed_time = self.timer.resume();
         println!("resume (elapsed time: {}sec)", elapsed_time);
         Ok(())

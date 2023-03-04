@@ -195,7 +195,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/zsh;
-			shellScript = "cd \"./../framework/\"\ncargo build --release --target aarch64-apple-ios --target x86_64-apple-ios\nlipo -create -output \"./target/libframework.a\" \"./target/aarch64-apple-ios/release/libframework.a\" \"./target/x86_64-apple-ios/release/libframework.a\"\n";
+			shellScript = "cd \"./../framework/\"\n\n{ \n    cargo build --release --target aarch64-apple-ios --target x86_64-apple-ios &&\n    lipo -create -output \"./target/libframework.a\" \"./target/aarch64-apple-ios/release/libframework.a\" \"./target/x86_64-apple-ios/release/libframework.a\"\n} || {\n    echo \"error: Framework library creation failed.\"\n    exit 1\n}\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

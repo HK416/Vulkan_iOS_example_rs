@@ -1,4 +1,5 @@
-use std::time::Instant;
+use std::thread;
+use std::time::{Instant, Duration};
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,9 +53,12 @@ impl<const N_CNT: usize> Timer<N_CNT> {
 
         if let Some(vsync) = vsync {
             while elapsed_time_in_sec < (1.0 / vsync as f32) {
+                if (1.0 / vsync as f32) - elapsed_time_in_sec > Duration::from_millis(64).as_secs_f32() {
+                    thread::yield_now();
+                }
                 self.curr_time_point = Instant::now();
-                elapsed_time_in_sec = self.prev_time_point
-                    .saturating_duration_since(self.curr_time_point)
+                elapsed_time_in_sec = self.curr_time_point
+                    .saturating_duration_since(self.prev_time_point)
                     .as_secs_f32();
             }
         }

@@ -1,6 +1,7 @@
 use std::ops;
 use std::fmt;
 use std::cmp;
+use bytemuck::{Zeroable, Pod};
 use super::mat2::Mat2x2;
 use super::quat::Quat;
 use super::vec3::Vec3;
@@ -9,7 +10,7 @@ use super::vec3::Vec3;
 /// - row major
 /// - pre-multiplicaiton
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, Zeroable, Pod)]
 pub struct Mat3x3 {
     pub r1c1: f32, pub r1c2: f32, pub r1c3: f32,
     pub r2c1: f32, pub r2c2: f32, pub r2c3: f32,

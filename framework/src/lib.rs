@@ -1,13 +1,16 @@
 #![allow(unused_imports)]
+mod app;
 mod math;
-mod mesh;
 mod timer;
 mod error;
+mod world;
 mod renderer;
 mod framework;
 
 use std::ptr;
-use std::ffi::{c_void, c_char};
+use std::path::PathBuf;
+use std::ffi::{c_void, c_char, CString, CStr};
+use std::str::FromStr;
 
 use error::RuntimeError;
 use renderer::AppHandle;
@@ -19,6 +22,8 @@ static mut LAST_FRAMEWORK_ERR_MSG: Option<RuntimeError> = None;
 #[cfg(target_os = "ios")]
 pub extern "C" fn createFramework(
     ui_view: *mut c_void,
+    assets_dir: *const c_char,
+    scale_factor: f32,
     screen_width: u32,
     screen_height: u32,
     viewer_top: i32,
@@ -28,9 +33,18 @@ pub extern "C" fn createFramework(
 ) -> *mut c_void {
     assert!(!ui_view.is_null(), "view cannot be a null pointer.");
     let handle = AppHandle::IOS { ui_view: unsafe { std::mem::transmute(ui_view) } };
-    let screen_size = (screen_width, screen_height);
-    let viewer_area = (viewer_top, viewer_left, viewer_bottom, viewer_right);
-    return match Framework::new(handle, Some(screen_size), Some(viewer_area)) {
+    let screen_size = [screen_width, screen_height];
+    let viewer_area = [viewer_top, viewer_left, viewer_bottom, viewer_right];
+    let assets_dir = match assets_dir.is_null() {
+        false =>  {
+            let assets_dir = unsafe { CStr::from_ptr(assets_dir as *const i8) };
+            PathBuf::from_str(assets_dir.to_str().unwrap()).unwrap()
+        },
+        true => {
+            PathBuf::new()
+        },
+    };
+    return match Framework::new(handle, assets_dir, scale_factor, screen_size, viewer_area) {
         Ok(framework) => {
             Box::into_raw(Box::new(framework)) as *mut c_void
         },
@@ -105,6 +119,7 @@ pub extern "C" fn getLastFrameworkErrMsgDbg(buf: *mut c_char, buf_size: u32) -> 
     assert!(buf_size > 0, "buffer size cannot be zero.");
     return match unsafe { &LAST_FRAMEWORK_ERR_MSG } {
         Some(msg) => {
+            println!("{}", msg.what());
             unsafe { buf.copy_from(msg.debug_info().as_ptr() as *const i8, buf_size as usize) };
             true
         },

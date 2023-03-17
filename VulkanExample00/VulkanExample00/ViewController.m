@@ -5,6 +5,7 @@
 //  Created by HK416 on 2023/02/22.
 //
 
+#import <Metal/Metal.h>
 #import "ViewController.h"
 #import "SceneDelegate.h"
 #import "AppDelegate.h"
@@ -21,11 +22,32 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    CGFloat scale_factor = UIScreen.mainScreen.nativeScale;
+    self.view.contentScaleFactor = scale_factor;
+    
     SceneDelegate *sceneDelegate = (SceneDelegate*)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject.delegate;
     sceneDelegate.viewController = self;
     
+    const char *assets_dir = [NSBundle.mainBundle.resourcePath stringByAppendingString: @"/Assets/"].UTF8String;
+    
+    CGRect screenSize = self.view.bounds;
+    UIEdgeInsets safeArea = self.view.window.safeAreaInsets;
+    unsigned int screenWidth = (unsigned int)screenSize.size.width;
+    unsigned int screenHeight = (unsigned int)screenSize.size.height;
+    int viewerTop = (int)safeArea.top;
+    int viewerLeft = (int)safeArea.left;
+    int viewerBottom = (int)safeArea.bottom;
+    int viewerRight = (int)safeArea.right;
+    _framework = createFramework((__bridge void*)self.view, assets_dir, (float)scale_factor, screenWidth, screenHeight, viewerTop, viewerLeft, viewerBottom, viewerRight);
+    _frameworkStandby = YES;
+    [self handleErrorMessage];
+    
+    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(frameAdvanced)];
+//    [_displayLink setPreferredFramesPerSecond:UIScreen.mainScreen.maximumFramesPerSecond];
+//    [_displayLink setPreferredFramesPerSecond:10];
+    [_displayLink addToRunLoop:NSRunLoop.currentRunLoop forMode:NSDefaultRunLoopMode];
+    
     _viewHasAppeared = NO;
-    _frameworkStandby = NO;
 }
 
 - (void)handleErrorMessage {
@@ -57,23 +79,6 @@
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    
-    CGRect screenSize = UIScreen.mainScreen.nativeBounds;
-    UIEdgeInsets safeArea = self.view.window.safeAreaInsets;
-    unsigned int screenWidth = (unsigned int)screenSize.size.width;
-    unsigned int screenHeight = (unsigned int)screenSize.size.height;
-    int viewerTop = (int)safeArea.top;
-    int viewerLeft = (int)safeArea.left;
-    int viewerBottom = (int)safeArea.bottom;
-    int viewerRight = (int)safeArea.right;
-    _framework = createFramework((__bridge void*)self.view, screenWidth, screenHeight, viewerTop, viewerLeft, viewerBottom, viewerRight);
-    _frameworkStandby = YES;
-    [self handleErrorMessage];
-    
-    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(frameAdvanced)];
-    [_displayLink setPreferredFramesPerSecond:UIScreen.mainScreen.maximumFramesPerSecond];
-    [_displayLink addToRunLoop:NSRunLoop.currentRunLoop forMode:NSDefaultRunLoopMode];
-    
     _viewHasAppeared = YES;
 }
 

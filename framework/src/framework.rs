@@ -1,52 +1,70 @@
 #![allow(unused_imports)]
 use std::fmt::Debug;
 use std::ffi::c_void;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use vulkano::command_buffer::{RenderingInfo, PrimaryCommandBufferAbstract};
+use vulkano::sync::GpuFuture;
+
 use crate::timer::Timer;
-use crate::error::RuntimeError;
-use crate::renderer::{rgb, Renderer, AppHandle};
+use crate::world::scene::SceneManager;
+use crate::{err, error::RuntimeError};
+use crate::renderer::{Renderer, AppHandle};
+
+use crate::app::*;
 
 
 pub struct Framework {
-    renderer: Renderer,
     timer: Timer,
-    viewer_area: Option<(i32, i32, i32, i32)>,
+    renderer: Renderer,
+    scene_manager: SceneManager<SceneID>,
 }
 
 impl Framework {
     pub fn new(
         handle: AppHandle, 
-        screen_size: Option<(u32, u32)>,
-        viewer_area: Option<(i32, i32, i32, i32)>
+        assets_dir: PathBuf,
+        scale_factor: f32,
+        screen_size: [u32; 2],
+        viewer_area: [i32; 4],
     ) -> Result<Self, RuntimeError> {
-        let renderer = Renderer::new(handle, screen_size)?;
         let timer = Timer::new();
+        let renderer = Renderer::new(handle, &assets_dir, scale_factor, screen_size, viewer_area)?;
+
+        let mut builder = renderer.primary_command_buffer(None)?;
+
+        let scene_manager = SceneManager::new(vec![
+            (SceneID::Main, MainScene::new(&renderer, &mut builder)?),
+        ]);
+
+        let mut future = renderer.queue_submit(builder)?;
+        future.cleanup_finished();
+
         Ok(Self {
-            renderer,
             timer,
-            viewer_area, 
+            renderer,
+            scene_manager,
         })
     }
 
     pub fn frame_advanced(&mut self) -> Result<(), RuntimeError> {
-        self.timer.tick(None);
-
-        let (red, green, blue) = rgb(128, 128, 128);
-        if let Some(guard) = self.renderer.prepare_render(red, green, blue, 1.0)? {
-            self.renderer.submit_and_present(guard)?;
-        }
-
+        self.timer.tick(Some(60));
+        self.scene_manager.frame_advanced(&mut self.timer, &mut self.renderer)?;
         println!("frame rate:{}", self.timer.get_frame_rate());
         Ok(())
     }
 
     pub fn paused(&mut self) -> Result<(), RuntimeError> {
         self.timer.pause();
+        self.scene_manager.pause(&self.timer, &self.renderer)?;
         println!("paused");
         Ok(())
     }
 
     pub fn resume(&mut self) -> Result<(), RuntimeError> {
         let elapsed_time = self.timer.resume();
+        self.scene_manager.resume(&self.timer, &self.renderer)?;
         println!("resume (elapsed time: {}sec)", elapsed_time);
         Ok(())
     }

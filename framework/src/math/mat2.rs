@@ -1,13 +1,14 @@
 use std::cmp;
 use std::ops;
 use std::fmt;
+use bytemuck::{Zeroable, Pod};
 use super::vec2::Vec2;
 
 /// 2by2 matrix.
 /// - row major
 /// - pre-multiplication
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, Zeroable, Pod)]
 pub struct Mat2x2 {
     pub r1c1: f32, pub r1c2: f32,
     pub r2c1: f32, pub r2c2: f32 

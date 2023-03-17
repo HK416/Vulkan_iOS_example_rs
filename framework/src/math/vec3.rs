@@ -1,11 +1,12 @@
 use std::cmp;
 use std::fmt;
 use std::ops;
+use bytemuck::{Zeroable, Pod};
 use super::mat3::Mat3x3;
 
 /// 3-dimensional vector.
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, Zeroable, Pod)]
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,

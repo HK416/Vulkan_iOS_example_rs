@@ -1,11 +1,12 @@
 use std::fmt;
 use std::ops;
 use std::cmp;
+use bytemuck::{Zeroable, Pod};
 use super::mat2::Mat2x2;
 
 /// 2-dimensional vector.
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, Zeroable, Pod)]
 pub struct Vec2 {
     pub x: f32,
     pub y: f32 

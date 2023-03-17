@@ -13,13 +13,13 @@ use vulkano::memory::allocator::MemoryAllocator;
 use crate::{err, error::RuntimeError};
 
 #[inline]
-pub fn rgb(red: u8, green: u8, blue: u8) -> (f32, f32, f32) {
-    (red as f32 / 255.0, green as f32 / 255.0, blue as f32 / 255.0)
+pub fn rgb(red: u8, green: u8, blue: u8) -> [f32; 3] {
+    [red as f32 / 255.0, green as f32 / 255.0, blue as f32 / 255.0]
 }
 
 #[inline]
-pub fn rgba(red: u8, green: u8, blue: u8, alpha: u8) -> (f32, f32, f32, f32) {
-    (red as f32 / 255.0, green as f32 / 255.0, blue as f32 / 255.0, alpha as f32 / 255.0)
+pub fn rgba(red: u8, green: u8, blue: u8, alpha: u8) -> [f32; 4] {
+    [red as f32 / 255.0, green as f32 / 255.0, blue as f32 / 255.0, alpha as f32 / 255.0]
 }
 
 #[inline]
@@ -30,8 +30,7 @@ pub fn get_instance_extensions() -> InstanceExtensions {
         khr_xcb_surface: true,
         khr_xlib_surface: true,
         khr_wayland_surface: true,
-        mvk_ios_surface: true,
-        mvk_macos_surface: true,
+        ext_metal_surface: true,
         khr_win32_surface: true,
         khr_get_physical_device_properties2: true,
         khr_get_surface_capabilities2: true,
@@ -120,11 +119,56 @@ pub fn create_vulkan_device_and_queue(
 }
 
 #[inline]
+pub fn recreate_vulkan_swapchain(
+    screen_size: [u32; 2],
+    swapchain: &Arc<Swapchain>,
+    render_pass: &Arc<RenderPass>,
+    depth_stencil_image_view: &Arc<ImageView<AttachmentImage>>,
+) -> Result<(Arc<Swapchain>, Vec<Arc<ImageView<SwapchainImage>>>, Vec<Arc<Framebuffer>>), RuntimeError> {
+    let (new_swapchain, new_swapchain_images) = swapchain
+        .recreate(SwapchainCreateInfo {
+            image_extent: screen_size,
+            ..swapchain.create_info()
+        }
+    ).map_err(|e| err!("Swapchain Recreation Error: {}", e.to_string()))?;
+
+    let new_swapchain_image_views = new_swapchain_images
+        .iter()
+        .map(|image| {
+            ImageView::new(
+                image.clone(),
+                ImageViewCreateInfo {
+                    view_type: ImageViewType::Dim2d,
+                    format: Some(image.format()),
+                    subresource_range: ImageSubresourceRange {
+                        mip_levels: (0..1),
+                        array_layers: (0..1),
+                        aspects: ImageAspects {
+                            color: true,
+                            ..Default::default()
+                        }
+                    },
+                    ..Default::default()
+                }
+            ).map_err(|e| err!("Swapchain Recreation Error: {}", e.to_string()))
+        }).collect::<Result<Vec<Arc<ImageView<SwapchainImage>>>, RuntimeError>>()?;
+    
+    let new_framebuffers = create_vulkan_framebuffers(
+        screen_size, 
+        &render_pass, 
+        &new_swapchain_image_views, 
+        &depth_stencil_image_view
+    )?;
+
+    return Ok((new_swapchain, new_swapchain_image_views, new_framebuffers));
+}
+
+#[inline]
 pub fn create_vulkan_swapchain(
-    screen_size: (u32, u32),
+    screen_size: [u32; 2],
     device: &Arc<Device>,
     surface: &Arc<Surface>
-) -> Result<(Arc<Swapchain>, Vec<Arc<ImageView<SwapchainImage>>>), RuntimeError> {
+) -> Result<(Arc<Swapchain>, Vec<Arc<ImageView<SwapchainImage>>>, u32), RuntimeError> {
     let surface_capacities = device
         .physical_device()
         .surface_capabilities(surface, Default::default())
@@ -143,7 +187,7 @@ pub fn create_vulkan_swapchain(
                 _ => 5,
             }
         }).unwrap_or(PresentMode::Fifo);
-    
+
     let surface_formats = device
         .physical_device()
         .surface_formats(&surface, Default::default())
@@ -156,17 +200,23 @@ pub fn create_vulkan_swapchain(
             (Some(format), color_space)
         }).unwrap_or((Some(surface_formats[0].0), surface_formats[0].1));
 
+    let image_count = 3.clamp(
+        surface_capacities.min_image_count, 
+        surface_capacities.max_image_count.unwrap_or(surface_capacities.min_image_count)
+    );
     let (swapchain, swapchain_images) = Swapchain::new(
         device.clone(), 
         surface.clone(), 
         SwapchainCreateInfo {
-            min_image_count: surface_capacities.min_image_count,
+            min_image_count: image_count,
             image_format,
             image_color_space,
-            image_extent: [screen_size.0, screen_size.1],
+            image_extent: screen_size,
             image_array_layers: 1,
             image_usage: ImageUsage { 
                 color_attachment: true,
+                transfer_src: surface_capacities.supported_usage_flags.transfer_src,
+                transfer_dst: surface_capacities.supported_usage_flags.transfer_dst,
                 ..Default::default()
             },
             pre_transform: surface_capacities.current_transform,
@@ -197,7 +247,7 @@ pub fn create_vulkan_swapchain(
             ).map_err(|e| err!("Vk Create Error:{}", e.to_string()))
         }).collect::<Result<_, RuntimeError>>()?;
 
-    Ok((swapchain, swapchain_image_view))
+    Ok((swapchain, swapchain_image_view, image_count))
 }
 
 #[inline]
@@ -234,7 +284,7 @@ pub fn get_depth_stencil_format(device: &Arc<Device>)
 
 #[inline]
 pub fn create_depth_stencil(
-    screen_size: (u32, u32),
+    screen_size: [u32; 2],
     allocator: &impl MemoryAllocator,
     device: &Arc<Device>,
 ) -> Result<Arc<ImageView<AttachmentImage>>, RuntimeError> {
@@ -242,7 +292,7 @@ pub fn create_depth_stencil(
 
     let depth_stencil_image = AttachmentImage::with_usage(
         allocator, 
-        [screen_size.0, screen_size.1], 
+        screen_size, 
         depth_stencil_format, 
         ImageUsage { depth_stencil_attachment: true, ..Default::default() }
     ).map_err(|e| err!("Vk Create Error:{}", e.to_string()))?;
@@ -369,7 +419,7 @@ pub fn create_vulkan_render_pass(
 
 #[inline]
 pub fn create_vulkan_framebuffers(
-    screen_size: (u32, u32),
+    screen_size: [u32; 2],
     render_pass: &Arc<RenderPass>,
     swapchain_image_views: &Vec<Arc<ImageView<SwapchainImage>>>,
     depth_stencil_image_view: &Arc<ImageView<AttachmentImage>>,
@@ -383,7 +433,7 @@ pub fn create_vulkan_framebuffers(
                     swapchain_image_view.clone(),
                     depth_stencil_image_view.clone()
                 ],
-                extent: [screen_size.0, screen_size.1],
+                extent: screen_size,
                 layers: 1,
                 ..Default::default()
             })

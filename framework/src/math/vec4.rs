@@ -1,11 +1,12 @@
 use std::ops;
 use std::fmt;
 use std::cmp;
+use bytemuck::{Zeroable, Pod};
 use super::mat4::Mat4x4;
 
 /// 4-dimensional vector.
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, Zeroable, Pod)]
 pub struct Vec4 {
     pub x: f32,
     pub y: f32,

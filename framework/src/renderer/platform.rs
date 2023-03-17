@@ -35,12 +35,21 @@ unsafe fn create_vulkan_surface_ios(
     ui_view: *mut Object,
     instance: &Arc<Instance>
 ) -> Result<Arc<Surface>, RuntimeError> {
-    let main_layer: *mut Object = msg_send![ui_view, layer];
-    return Surface::from_ios(
-        instance.clone(),
-        IOSMetalLayer::new(ui_view, main_layer),
+    let layer: *mut Object = msg_send![ui_view, layer];
+    create_vulkan_surface_metal(layer, instance)
+}
+
+#[inline]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+unsafe fn create_vulkan_surface_metal(
+    layer: *mut Object,
+    instance: &Arc<Instance>
+) -> Result<Arc<Surface>, RuntimeError> {
+    Surface::from_metal(
+        instance.clone(), 
+        layer, 
         None
-    ).map_err(|e| err!("Vk Create Error:{}", e.to_string()));
+    ).map_err(|e| err!("Vk Create Error: {}", e.to_string()))
 }
 
 #[inline]
@@ -49,11 +58,8 @@ unsafe fn create_vulkan_surface_macos(
     ns_view: *mut Object,
     instance: &Arc<Instance>
 ) -> Result<Arc<Surface>, RuntimeError> {
-    return Surface::from_mac_os(
-        instance.clone(), 
-        ns_view, 
-        None
-    ).map_err(|e| err!("Vk Create Error:{}", e.to_string()));
+    let layer: *mut Object = msg_send![ns_view, layer];
+    create_vulkan_surface_metal(layer, instance)
 }
 
 #[inline]
@@ -77,22 +83,22 @@ pub fn create_vulkan_surface(
 #[inline]
 #[cfg(target_os = "ios")]
 unsafe fn get_screen_size_ios(ui_view: *mut Object) 
--> Result<(u32, u32), RuntimeError> {
+-> Result<[u32; 2], RuntimeError> {
     let bounds: CGRect = msg_send![ui_view, bounds];
-    Ok((bounds.size.width as u32, bounds.size.height as u32))
+    Ok([bounds.size.width as u32, bounds.size.height as u32])
 }
 
 #[inline]
 #[cfg(target_os = "macos")]
 unsafe fn get_screen_size_macos(ns_view: *mut Object) 
--> Result<(u32, u32), RuntimeError> {
+-> Result<[u32; 2], RuntimeError> {
     let bounds: CGRect = msg_send![ns_view, bounds];
-    Ok((bounds.size.width as u32, bounds.size.height as u32))
+    Ok([bounds.size.width as u32, bounds.size.height as u32])
 }
 
 #[inline]
 pub fn get_screen_size(handle: &AppHandle) 
--> Result<(u32, u32), RuntimeError> {
+-> Result<[u32; 2], RuntimeError> {
     match handle {
         #[cfg(target_os = "ios")]
         &AppHandle::IOS { ui_view } => {

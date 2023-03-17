@@ -1,6 +1,7 @@
 use std::ops;
 use std::fmt;
 use std::cmp;
+use bytemuck::{Zeroable, Pod};
 use super::mat3::Mat3x3;
 use super::mat4::Mat4x4;
 use super::vec3::Vec3;
@@ -8,7 +9,7 @@ use super::vec4::Vec4;
 
 /// quaternion.
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, Zeroable, Pod)]
 pub struct Quat {
     pub x: f32,
     pub y: f32,

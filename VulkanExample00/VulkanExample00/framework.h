@@ -10,7 +10,7 @@
 
 #define MAX_MSG_BUF_SIZE 4096
  
-void *createFramework(void *view, unsigned int screenWidth, unsigned int screenHeight, int viewerTop, int viewerLeft, int viewerBottom, int viewerRight);
+void *createFramework(void *view, const char* assets_dir, float scale_factor, unsigned int screenWidth, unsigned int screenHeight, int viewerTop, int viewerLeft, int viewerBottom, int viewerRight);
 
 void destroyFramework(void *framework);
 

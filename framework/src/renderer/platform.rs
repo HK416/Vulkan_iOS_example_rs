@@ -1,16 +1,17 @@
 use std::sync::Arc;
 use std::ffi::c_void;
+
 use vulkano::instance::Instance;
 use vulkano::swapchain::Surface;
+
 use crate::{err, error::RuntimeError};
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-use apple::*;
-
-#[cfg(target_os = "ios")]
-use vulkano::swapchain::IOSMetalLayer;
+use self::apple::*;
 
 
+
+/// Application native handle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppHandle {
     IOS { ui_view: *mut Object },
@@ -18,50 +19,45 @@ pub enum AppHandle {
 }
 
 impl AppHandle {
+    /// Creates an iOS handle with the given UIView pointer.
+    /// A given UIView must implement CAMetalLayer.
+    /// 
+    /// # Unsafety 
+    /// The given pointer must be a valid UIView pointer.
+    /// Libraries are not checked for correctness.
+    /// 
     #[inline]
-    pub fn from_ios(ui_view: *mut c_void) -> Self {
-        Self::IOS { ui_view: unsafe { std::mem::transmute(ui_view) }}
+    #[cfg(target_os = "ios")]
+    pub unsafe fn from_ios(ui_view: *mut c_void) -> Self {
+        Self::IOS { ui_view: std::mem::transmute(ui_view) }
     }
 
+    /// Creates an macOS handle with the given NSView pointer.
+    /// A given NSView must implement CAMetalLayer.
+    /// 
+    /// # Unsafety 
+    /// The given pointer must be valid NSView pointer.
+    /// Libraries are not checked for correctness.
+    /// 
     #[inline]
-    pub fn from_macos(ns_view: *mut c_void) -> Self {
-        Self::MacOS { ns_view: unsafe { std::mem::transmute(ns_view) }}
+    #[cfg(target_os = "macos")]
+    pub unsafe fn from_macos(ns_view: *mut c_void) -> Self {
+        Self::MacOS { ns_view: std::mem::transmute(ns_view) }
     }
 }
 
-#[inline]
-#[cfg(target_os = "ios")]
-unsafe fn create_vulkan_surface_ios(
-    ui_view: *mut Object,
-    instance: &Arc<Instance>
-) -> Result<Arc<Surface>, RuntimeError> {
-    let layer: *mut Object = msg_send![ui_view, layer];
-    create_vulkan_surface_metal(layer, instance)
-}
+unsafe impl Send for AppHandle { }
+unsafe impl Sync for AppHandle { }
 
-#[inline]
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-unsafe fn create_vulkan_surface_metal(
-    layer: *mut Object,
-    instance: &Arc<Instance>
-) -> Result<Arc<Surface>, RuntimeError> {
-    Surface::from_metal(
-        instance.clone(), 
-        layer, 
-        None
-    ).map_err(|e| err!("Vk Create Error: {}", e.to_string()))
-}
 
-#[inline]
-#[cfg(target_os = "macos")]
-unsafe fn create_vulkan_surface_macos(
-    ns_view: *mut Object,
-    instance: &Arc<Instance>
-) -> Result<Arc<Surface>, RuntimeError> {
-    let layer: *mut Object = msg_send![ns_view, layer];
-    create_vulkan_surface_metal(layer, instance)
-}
-
+/// Creates a vulkan surface with the given application handle.
+/// 
+/// # Runtime Errors
+/// - If creation fails, a runtime error message is returned.
+/// 
+/// # Panics
+/// - (macOS or iOS) Abort program execution if the pointer is not valid.
+/// 
 #[inline]
 pub fn create_vulkan_surface(
     handle: &AppHandle,
@@ -80,37 +76,64 @@ pub fn create_vulkan_surface(
     }
 }
 
+
+/// A function that creates a vulkan surface for iOS.
+/// 
+/// # Runtime Errors
+/// - If creation fails, a runtime error message is returned.
+/// 
+/// # Panics
+/// - Abort program execution if the pointer is not valid.
+/// 
 #[inline]
 #[cfg(target_os = "ios")]
-unsafe fn get_screen_size_ios(ui_view: *mut Object) 
--> Result<[u32; 2], RuntimeError> {
-    let bounds: CGRect = msg_send![ui_view, bounds];
-    Ok([bounds.size.width as u32, bounds.size.height as u32])
+unsafe fn create_vulkan_surface_ios(
+    ui_view: *mut Object,
+    instance: &Arc<Instance>
+) -> Result<Arc<Surface>, RuntimeError> {
+    let layer: *mut Object = msg_send![ui_view, layer];
+    create_vulkan_surface_metal(layer, instance)
 }
 
+
+/// A function that creates a vulkan surface for macOS.
+/// 
+/// # Runtime Errors
+/// - If creation fails, a runtime error message is returned.
+/// 
+/// # Panics
+/// - Abort program execution if the pointer is not valid.
+/// 
 #[inline]
 #[cfg(target_os = "macos")]
-unsafe fn get_screen_size_macos(ns_view: *mut Object) 
--> Result<[u32; 2], RuntimeError> {
-    let bounds: CGRect = msg_send![ns_view, bounds];
-    Ok([bounds.size.width as u32, bounds.size.height as u32])
+unsafe fn create_vulkan_surface_macos(
+    ns_view: *mut Object,
+    instance: &Arc<Instance>
+) -> Result<Arc<Surface>, RuntimeError> {
+    let layer: *mut Object = msg_send![ns_view, layer];
+    create_vulkan_surface_metal(layer, instance)
 }
 
+
+/// A function that creates a vulkan surface for apple metal.
+/// 
+/// # Runtime Errors
+/// - If creation fails, a runtime error message is returned.
+/// 
 #[inline]
-pub fn get_screen_size(handle: &AppHandle) 
--> Result<[u32; 2], RuntimeError> {
-    match handle {
-        #[cfg(target_os = "ios")]
-        &AppHandle::IOS { ui_view } => {
-            unsafe { get_screen_size_ios(ui_view) }
-        },
-        #[cfg(target_os = "macos")]
-        &AppHandle::MacOS { ns_view } => {
-            unsafe { get_screen_size_macos(ns_view) }
-        },
-        _ => Err(err!("No supported platform."))
-    }
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+unsafe fn create_vulkan_surface_metal(
+    layer: *mut Object,
+    instance: &Arc<Instance>
+) -> Result<Arc<Surface>, RuntimeError> {
+    Surface::from_metal(
+        instance.clone(), 
+        layer, 
+        None
+    ).map_err(|e| err!("Vk Create Error: {}", e.to_string()))
 }
+
+
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 mod apple {

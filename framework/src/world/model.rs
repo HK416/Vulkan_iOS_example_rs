@@ -1,143 +1,413 @@
-use std::ops::Neg;
+use std::fmt;
+use std::hash::Hash;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
-pub use crate::math::*; 
-pub use crate::renderer::*;
-pub use crate::timer::Timer;
-pub use crate::{err, error::RuntimeError};
+use vulkano::command_buffer::AutoCommandBufferBuilder;
 
-use super::shader::ModelGraphicsShader;
+use crate::math::*;
+use crate::renderer::*;
+use crate::world::mesh::Mesh;
+use crate::world::shader::GraphicsShader;
+use crate::{err, error::RuntimeError};
 
-pub trait Model {
+
+/// The data types of the nodes that make up the model.
+#[derive(Clone)]
+pub struct ModelNode<NodeID = String> 
+where NodeID: fmt::Debug + Clone + Eq + Hash {
+    pub id: NodeID,
+    pub transform: Mat4x4,
+    pub world_matrix: Mat4x4,
+    pub mesh: Option<Arc<Mesh>>,
+    pub shader: Option<Arc<GraphicsShader>>,
+    pub parent: Option<NodeID>,
+    pub sibling: Option<NodeID>,
+    pub child: Option<NodeID>
+}
+
+impl<NodeID> ModelNode<NodeID>
+where NodeID: fmt::Debug + Clone + Eq + Hash {
+    /// Returns the relative position of a node.
     #[inline]
     fn get_position(&self) -> Vec3 {
-        let mtx = self.ref_world_matrix();
-        Vec3 { x: mtx.r4c1, y: mtx.r4c2, z: mtx.r4c3 }
+        Vec3::new_vector(
+            self.transform.r4c1, 
+            self.transform.r4c2, 
+            self.transform.r4c3
+        )
     }
 
-    #[inline]
-    fn set_position(&mut self, position: Vec3) {
-        let mtx = self.mut_world_matrix();
-        mtx.r4c1 = position.x;
-        mtx.r4c2 = position.y;
-        mtx.r4c3 = position.z;
-    }
-
-
+    /// Returns the relative rotation of a node.
     #[inline]
     fn get_quaternion(&self) -> Quat {
-        self.ref_world_matrix().into_quat()
+        self.transform.into_quat()
     }
 
+    /// Returns the relative right vector of a node.
+    #[inline]
+    fn get_right_vector(&self) -> Vec3 {
+        Vec3::new_vector(
+            self.transform.r1c1, 
+            self.transform.r1c2, 
+            self.transform.r1c3
+        )
+    }
+
+    /// Returns the relative up vector of a node.
+    #[inline]
+    fn get_up_vector(&self) -> Vec3 {
+        Vec3::new_vector(
+            self.transform.r2c1, 
+            self.transform.r2c2, 
+            self.transform.r2c3
+        )
+    }
+    
+    /// Returns the relative look vector of a node.
+    #[inline]
+    fn get_look_vector(&self) -> Vec3 {
+        Vec3::new_vector(
+            self.transform.r3c1, 
+            self.transform.r3c2, 
+            self.transform.r3c3
+        )
+    }
+
+    /// Sets the relative position of a node.
+    #[inline]
+    fn set_position(&mut self, position: Vec3) {
+        self.transform.r4c1 = position.x;
+        self.transform.r4c2 = position.y;
+        self.transform.r4c3 = position.z;
+    }
+
+    /// Sets the relative rotation of a node.
     #[inline]
     fn set_quaternion(&mut self, quaternion: Quat) {
-        assert!(quaternion.is_normalized(), "The given quaternion must be normalized.");
-        let rm = quaternion.into_matrix3x3();
-        let mtx = self.mut_world_matrix();
-        
-        mtx.r1c1 = rm.r1c1;
-        mtx.r1c2 = rm.r1c2;
-        mtx.r1c3 = rm.r1c3;
+        let m = quaternion.normalize().into_matrix3x3();
 
-        mtx.r2c1 = rm.r2c1;
-        mtx.r2c2 = rm.r2c2;
-        mtx.r2c3 = rm.r2c3;
+        self.transform.r1c1 = m.r1c1;
+        self.transform.r1c2 = m.r1c2;
+        self.transform.r1c3 = m.r1c3;
 
-        mtx.r3c1 = rm.r3c1;
-        mtx.r3c2 = rm.r3c2;
-        mtx.r3c3 = rm.r3c3;
+        self.transform.r2c1 = m.r2c1;
+        self.transform.r2c2 = m.r2c2;
+        self.transform.r2c3 = m.r2c3;
+
+        self.transform.r3c1 = m.r3c1;
+        self.transform.r3c2 = m.r3c2;
+        self.transform.r3c3 = m.r3c3;
     }
 
-
+    /// Sets the releative rotation of a node.
     #[inline]
-    fn get_right_vec(&self) -> Vec3 {
-        let mtx = self.ref_world_matrix();
-        Vec3 { x: mtx.r1c1, y: mtx.r1c2, z: mtx.r1c3 }
-    }
-    
-    #[inline]
-    fn get_up_vec(&self) -> Vec3 {
-        let mtx = self.ref_world_matrix();
-        Vec3 { x: mtx.r2c1, y: mtx.r2c2, z: mtx.r2c3 }
-    }
+    fn set_look_at_point(&mut self, point: Vec3) {
+        let up = self.get_up_vector().normalize();
+        let look = (point - self.get_position()).normalize();
+        let right = up.cross(&look).normalize();
+        let up = look.cross(&right).normalize();
 
-    #[inline]
-    fn get_look_vec(&self) -> Vec3 {
-        let mtx = self.ref_world_matrix();
-        Vec3 { x: mtx.r3c1, y: mtx.r3c2, z: mtx.r3c3 }
-    }
+        self.transform.r1c1 = right.x;
+        self.transform.r1c2 = right.y;
+        self.transform.r1c3 = right.z;
 
+        self.transform.r2c1 = up.x;
+        self.transform.r2c2 = up.y;
+        self.transform.r2c3 = up.z;
 
-    #[inline]
-    fn translate_world(&mut self, distance: Vec3) {
-        self.set_position(self.get_position() + distance);
+        self.transform.r3c1 = look.x;
+        self.transform.r3c2 = look.y;
+        self.transform.r3c3 = look.z;
     }
 
+    /// Moves the position of a node relative to the node's coordinate system.
     #[inline]
     fn translate_local(&mut self, distance: Vec3) {
-        let right = distance.x * self.get_right_vec();
-        let up = distance.y * self.get_up_vec();
-        let look = distance.z * self.get_look_vec();
-        self.set_position(self.get_position() + right + up + look);
+        let x = self.get_right_vector().normalize() * distance.x;
+        let y = self.get_up_vector().normalize() * distance.y;
+        let z = self.get_look_vector().normalize() * distance.z;
+        self.translate_world(x + y + z);
     }
 
-
+    /// Moves the position of a node relative to the world's coordinate system.
     #[inline]
-    fn rotate_quaternion(&mut self, quaternion: Quat) {
-        assert!(quaternion.is_normalized(), "The given quaternion must be normalized.");
-        self.set_quaternion((self.get_quaternion() * quaternion).normalize());
+    fn translate_world(&mut self, distance: Vec3) {
+        self.transform.r4c1 += distance.x;
+        self.transform.r4c2 += distance.y;
+        self.transform.r4c3 += distance.z;
     }
 
+    /// Rotates the orientation of a node by an angle with a given axis.
     #[inline]
-    fn rotate_angle_axis(&mut self, angle_radian: f32, axis: Vec3) {
-        assert!(axis.is_normalized(), "The given axis must be normalized.");
-        self.set_quaternion((self.get_quaternion() * Quat::from_angle_axis(angle_radian, axis)).normalize());
+    fn rotate_from_angle_axis(&mut self, angle_radian: f32, axis: Vec3) {
+        self.rotate_from_quaternion(Quat::from_angle_axis(angle_radian, axis.normalize()));
     }
 
-    
-    fn ref_world_matrix(&self) -> &Mat4x4;
+    /// Rotates the orientation of a node by a given quaternion.
+    #[inline]
+    fn rotate_from_quaternion(&mut self, quaternion: Quat) {
+        let rotation_matrix = quaternion.normalize().into_matrix4x4();
+        self.transform = rotation_matrix * self.transform;
+    }
 
-    fn mut_world_matrix(&mut self) -> &mut Mat4x4;
+    /// Update the transform of nodes.
+    #[inline]
+    fn update_transform(&mut self, parent_matrix: Option<Mat4x4>) -> (Mat4x4, Option<NodeID>, Option<NodeID>) {
+        if let Some(parent_matrix) = parent_matrix {
+            self.world_matrix = self.transform * parent_matrix;
+        }
+        return (
+            self.world_matrix, 
+            self.sibling.clone(), 
+            self.child.clone()
+        )
+    }
 }
 
-pub trait DynamicModel : Model {
-    fn update(&mut self, timer: &Timer) -> Result<(), RuntimeError>;
+
+
+/// A model data type consisting of a set of nodes.
+pub struct Model<NodeID = String>
+where NodeID: fmt::Debug + Clone + Eq + Hash {
+    name: String,
+    root_id: NodeID,
+    nodes: Vec<ModelNode<NodeID>>,
+    id_index_map: HashMap<NodeID, usize>,
 }
 
-pub trait DrawableModel : Model {
-    fn prepare_drawing(
-        &mut self, 
-        shader: &ModelGraphicsShader,
-        builder: &mut AutoCommandBufferBuilder<SecondaryAutoCommandBuffer>
-    ) -> Result<(), RuntimeError>;
+impl<NodeID> Model<NodeID> 
+where NodeID: fmt::Debug + Clone + Eq + Hash {
+    pub fn from_nodes<I>(
+        name: &str, 
+        root_id: NodeID,
+        nodes: I,
+    ) -> Result<Self, RuntimeError> 
+    where 
+        I: IntoIterator<Item = ModelNode<NodeID>>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let name = name.to_string();
+        let nodes: Vec<_> = nodes.into_iter().collect();
+        let id_index_map: HashMap<_, _> = nodes
+            .iter()
+            .enumerate()
+            .map(|(idx, node)| {
+                (node.id.clone(), idx)
+            })
+            .collect();
 
-    fn draw(
-        &mut self, 
-        shader: &ModelGraphicsShader,
-        builder: &mut AutoCommandBufferBuilder<SecondaryAutoCommandBuffer>
-    ) -> Result<(), RuntimeError>;
-}
-
-pub trait CameraModel : Model {
-    fn ref_viewport(&self) -> &Viewport;
-
-    fn mut_viewport(&mut self) -> &mut Viewport;
-
-    fn ref_scissor(&self) -> &Scissor;
-
-    fn mut_scissor(&mut self) -> &mut Scissor;
-
-    #[inline]
-    fn get_view_matrix(&self) -> Mat4x4 {
-        let mut mtx = self.get_quaternion().into_matrix4x4().transpose();
-        mtx.r1c3 *= -1.0;
-        mtx.r2c3 *= -1.0;
-        mtx.r3c3 *= -1.0;
-
-        mtx.r4c1 = -self.get_position().dot(&self.get_right_vec());
-        mtx.r4c2 = -self.get_position().dot(&self.get_up_vec());
-        mtx.r4c3 = -self.get_position().dot(&self.get_look_vec());
-        return mtx;
+        if id_index_map.get(&root_id).is_none() {
+            Err(err!("Invalid root ID."))
+        }
+        else {
+            Ok(Self { name, root_id, nodes, id_index_map })
+        }
     }
 
-    fn get_projection_matrix(&self) -> Mat4x4;
+    /// Get the node's index with the given node's ID.
+    /// 
+    /// # Panics
+    /// Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// 
+    #[inline]
+    fn get_index(&self, id: &NodeID) -> usize {
+        match self.id_index_map.get(id) {
+            Some(&index) => index,
+            None => panic!("Logic Error: Node not registered in Model. (model name: {})", self.name),
+        }
+    }
+
+    /// Borrow a model node with the given index.
+    /// 
+    /// # Panics
+    /// Stop program execution if there is no node corresponding to the given index.
+    /// 
+    #[inline]
+    fn ref_node(&self, index: usize) -> &ModelNode<NodeID> {
+        match self.nodes.get(index) {
+            Some(node) => node,
+            None => panic!("Logic Error: ModelNode out of range. (model name: {})", self.name),
+        }
+    }
+
+    /// Borrow a model node with the given index. (mutable)
+    /// 
+    /// # Panics
+    /// Stop program execution if there is no node corresponding to the given index.
+    /// 
+    #[inline]
+    fn mut_node(&mut self, index: usize) -> &mut ModelNode<NodeID> {
+        match self.nodes.get_mut(index) {
+            Some(node) => node,
+            None => panic!("Logic Error: ModelNode out of range. (model name: {})", self.name),
+        }
+    } 
+
+    /// Returns the relative position of a node with the given ID.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn get_position(&self, id: &NodeID) -> Vec3 {
+        self.ref_node(self.get_index(id)).get_position()
+    }
+
+    /// Returns the relative rotation of a node with the given ID.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn get_quaternion(&self, id: &NodeID) -> Quat {
+        self.ref_node(self.get_index(id)).get_quaternion()
+    }
+
+    /// Returns the relative right vector of a node with the given ID.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn get_local_right_vector(&self, id: &NodeID) -> Vec3 {
+        self.ref_node(self.get_index(id)).get_right_vector()
+    }
+
+    /// Returns the relative up vector of a node with the given ID.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn get_local_up_vector(&self, id: &NodeID) -> Vec3 {
+        self.ref_node(self.get_index(id)).get_up_vector()
+    }
+
+    /// Returns the relative look vector of a node with the given ID.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn get_local_look_vector(&self, id: &NodeID) -> Vec3 {
+        self.ref_node(self.get_index(id)).get_look_vector()
+    }
+
+    /// Sets the relative position of a node with the given ID.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn set_position(&mut self, id: &NodeID, position: Vec3) {
+        self.mut_node(self.get_index(id)).set_position(position);
+        self.update_transform(id, None);
+    }
+
+    /// Sets the relative rotation of a node with the given ID.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn set_quaternion(&mut self, id: &NodeID, quaternion: Quat) {
+        self.mut_node(self.get_index(id)).set_quaternion(quaternion);
+        self.update_transform(id, None);
+    }
+
+    /// Sets the relative rotation of a node with the given ID.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn set_look_at_point(&mut self, id: &NodeID, point: Vec3) {
+        self.mut_node(self.get_index(id)).set_look_at_point(point);
+        self.update_transform(id, None);
+    }
+
+    /// Moves the position of a node relative to the node's coordinate system.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn translate_local(&mut self, id: &NodeID, distance: Vec3) {
+        self.mut_node(self.get_index(id)).translate_local(distance);
+        self.update_transform(id, None);
+    }
+
+    /// Moves the position of a node relative to the world's coordinate system.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn translate_world(&mut self, id: &NodeID, distance: Vec3) {
+        self.mut_node(self.get_index(id)).translate_world(distance);
+        self.update_transform(id, None);
+    }
+
+    /// Rotates the orientation of a node by an angle with a given axis.
+    ///  
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn rotate_from_angle_axis(&mut self, id: &NodeID, angle_radian: f32, axis: Vec3) {
+        self.mut_node(self.get_index(id)).rotate_from_angle_axis(angle_radian, axis);
+        self.update_transform(id, None);
+    }
+
+    /// Rotates the orientation of a node by a given quaternion.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn rotate_from_quaternion(&mut self, id: &NodeID, quaternion: Quat) {
+        self.mut_node(self.get_index(id)).rotate_from_quaternion(quaternion);
+        self.update_transform(id, None);
+    }
+
+    /// Update the transform of nodes.
+    /// 
+    /// # Panics
+    /// - Stop program execution if the ID of the given node does not belong to the set of nodes in the model.
+    /// - Stop program execution if there is no node corresponding to the given index.
+    /// 
+    pub fn update_transform(&mut self, id: &NodeID, parent_matrix: Option<Mat4x4>) {
+        let (world_matrix, sibling, child) = {
+            self.mut_node(self.get_index(id)).update_transform(parent_matrix)
+        };
+
+        if let Some(sibling) = &sibling {
+            self.update_transform(sibling, parent_matrix);
+        }
+
+        if let Some(child) = &child {
+            self.update_transform(child, Some(world_matrix));
+        }
+    }
+
+    #[inline]
+    pub fn ref_nodes(&self) -> Vec<&ModelNode<NodeID>> {
+        let mut nodes = Vec::with_capacity(self.nodes.capacity());
+        self.ref_nodes_recursion(&mut nodes, &self.root_id);
+        return nodes;
+    }
+
+    fn ref_nodes_recursion<'a>(&'a self, nodes: &mut Vec<&'a ModelNode<NodeID>>, id: &NodeID) {
+        let node = self.ref_node(self.get_index(id));
+        nodes.push(node);
+
+        if let Some(sibling) = &node.sibling {
+            self.ref_nodes_recursion(nodes, sibling);
+        }
+
+        if let Some(child) = &node.child {
+            self.ref_nodes_recursion(nodes, child);
+        }
+    }
 }

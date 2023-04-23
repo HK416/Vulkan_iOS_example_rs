@@ -1,13 +1,18 @@
 [package]
 name = "framework"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["HK416 <powerspirit127@gmail.com>"]
+publish = false
 
 [lib]
 crate-type = ["lib", "staticlib"]
 
+[features]
+monitor = []
+
 [dependencies]
 objc = "0.2"
-vulkano = "0.32"
+rand = "0.8"
+vulkano = "0.33"
 bytemuck = "1.13"

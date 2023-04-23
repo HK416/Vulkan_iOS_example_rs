@@ -8,9 +8,11 @@ mod renderer;
 mod framework;
 
 use std::ptr;
+use std::str::FromStr;
 use std::path::PathBuf;
 use std::ffi::{c_void, c_char, CString, CStr};
-use std::str::FromStr;
+
+
 
 use error::RuntimeError;
 use renderer::AppHandle;
@@ -32,9 +34,7 @@ pub extern "C" fn createFramework(
     viewer_right: i32,
 ) -> *mut c_void {
     assert!(!ui_view.is_null(), "view cannot be a null pointer.");
-    let handle = AppHandle::IOS { ui_view: unsafe { std::mem::transmute(ui_view) } };
-    let screen_size = [screen_width, screen_height];
-    let viewer_area = [viewer_top, viewer_left, viewer_bottom, viewer_right];
+    let handle = unsafe { AppHandle::from_ios(ui_view) };
     let assets_dir = match assets_dir.is_null() {
         false =>  {
             let assets_dir = unsafe { CStr::from_ptr(assets_dir as *const i8) };
@@ -44,6 +44,9 @@ pub extern "C" fn createFramework(
             PathBuf::new()
         },
     };
+
+    let screen_size = (screen_width, screen_height);
+    let viewer_area = (viewer_top, viewer_left, viewer_bottom, viewer_right);
     return match Framework::new(handle, assets_dir, scale_factor, screen_size, viewer_area) {
         Ok(framework) => {
             Box::into_raw(Box::new(framework)) as *mut c_void

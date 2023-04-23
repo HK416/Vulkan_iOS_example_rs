@@ -22,29 +22,13 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    CGFloat scale_factor = UIScreen.mainScreen.nativeScale;
-    self.view.contentScaleFactor = scale_factor;
+    self.view.contentScaleFactor = UIScreen.mainScreen.nativeScale;
     
     SceneDelegate *sceneDelegate = (SceneDelegate*)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject.delegate;
     sceneDelegate.viewController = self;
     
-    const char *assets_dir = [NSBundle.mainBundle.resourcePath stringByAppendingString: @"/Assets/"].UTF8String;
-    
-    CGRect screenSize = self.view.bounds;
-    UIEdgeInsets safeArea = self.view.window.safeAreaInsets;
-    unsigned int screenWidth = (unsigned int)screenSize.size.width;
-    unsigned int screenHeight = (unsigned int)screenSize.size.height;
-    int viewerTop = (int)safeArea.top;
-    int viewerLeft = (int)safeArea.left;
-    int viewerBottom = (int)safeArea.bottom;
-    int viewerRight = (int)safeArea.right;
-    _framework = createFramework((__bridge void*)self.view, assets_dir, (float)scale_factor, screenWidth, screenHeight, viewerTop, viewerLeft, viewerBottom, viewerRight);
-    _frameworkStandby = YES;
-    [self handleErrorMessage];
-    
     _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(frameAdvanced)];
-//    [_displayLink setPreferredFramesPerSecond:UIScreen.mainScreen.maximumFramesPerSecond];
-//    [_displayLink setPreferredFramesPerSecond:10];
+    [_displayLink setPreferredFramesPerSecond:UIScreen.mainScreen.maximumFramesPerSecond];
     [_displayLink addToRunLoop:NSRunLoop.currentRunLoop forMode:NSDefaultRunLoopMode];
     
     _viewHasAppeared = NO;
@@ -68,6 +52,9 @@
         [alert addAction:action];
         [self presentViewController:alert animated:YES completion:nil];
     }
+    else {
+        _frameworkStandby = YES;
+    }
 }
 
 - (void)frameAdvanced {
@@ -79,6 +66,21 @@
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    
+    CGFloat scale_factor = UIScreen.mainScreen.nativeScale;
+    const char *assets_dir = [NSBundle.mainBundle.resourcePath stringByAppendingString: @"/Assets/"].UTF8String;
+    
+    CGRect screenSize = self.view.bounds;
+    UIEdgeInsets safeArea = self.view.safeAreaInsets;
+    unsigned int screenWidth = (unsigned int)screenSize.size.width;
+    unsigned int screenHeight = (unsigned int)screenSize.size.height;
+    int viewerTop = (int)safeArea.top;
+    int viewerLeft = (int)safeArea.left;
+    int viewerBottom = (int)safeArea.bottom;
+    int viewerRight = (int)safeArea.right;
+    _framework = createFramework((__bridge void*)self.view, assets_dir, (float)scale_factor, screenWidth, screenHeight, viewerTop, viewerLeft, viewerBottom, viewerRight);
+    [self handleErrorMessage];
+    
     _viewHasAppeared = YES;
 }
 

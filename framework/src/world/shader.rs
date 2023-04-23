@@ -1,119 +1,111 @@
-use std::{collections::BTreeMap, hash::Hash};
-use crate::renderer::*;
-use super::model::DrawableModel;
+use std::sync::Arc;
+use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModelGraphicsShader {
+use vulkano::buffer::BufferContents;
+use vulkano::descriptor_set::PersistentDescriptorSet;
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::pipeline::{GraphicsPipeline, PipelineBindPoint, Pipeline};
+use vulkano::command_buffer::AutoCommandBufferBuilder;
+use vulkano::command_buffer::allocator::CommandBufferAllocator;
+
+use crate::world::variable::ShaderVariableAbstract;
+use crate::{err, error::RuntimeError};
+
+
+
+pub struct GraphicsShader {
     pipeline: Arc<GraphicsPipeline>,
+    variables: HashMap<u32, Arc<dyn ShaderVariableAbstract>>,
+    descriptor_set: Option<Arc<PersistentDescriptorSet>>,
 }
 
-impl ModelGraphicsShader {
-    pub fn new<'vs, 'tcs, 'tes, 'gs, 'fs>(
-        renderer: &Renderer,
-        input_assembly_state: Option<InputAssemblyState>,
-        vertex_input_state: Option<VertexInputState>,
-        color_blend_state: Option<ColorBlendState>,
-        depth_stencil_state: Option<DepthStencilState>,
-        multisample_state: Option<MultisampleState>,
-        rasterization_state: Option<RasterizationState>,
-        viewport_state: Option<ViewportState>,
-        discard_rectangle_state: Option<DiscardRectangleState>,
-        tessellation_state: Option<TessellationState>,
-        vertex_shader: EntryPoint<'vs>,
-        tessellation_shader: Option<(EntryPoint<'tcs>, EntryPoint<'tes>)>,
-        geometry_shader: Option<EntryPoint<'gs>>,
-        fragment_shader: EntryPoint<'fs>,
-    ) -> Result<Arc<Self>, RuntimeError> {
-        let mut builder = GraphicsPipeline::start()
-            .input_assembly_state(input_assembly_state.unwrap_or_default())
-            .vertex_input_state(vertex_input_state.unwrap_or_default())
-            .color_blend_state(color_blend_state.unwrap_or_default())
-            .depth_stencil_state(depth_stencil_state.unwrap_or_default())
-            .multisample_state(multisample_state.unwrap_or_default())
-            .rasterization_state(rasterization_state.unwrap_or_default())
-            .viewport_state(viewport_state.unwrap_or_default())
-            .discard_rectangle_state(discard_rectangle_state.unwrap_or_default())
-            .tessellation_state(tessellation_state.unwrap_or_default());
+impl GraphicsShader {
+    pub fn new<Iter>(
+        pipeline: Arc<GraphicsPipeline>,
+        allocator: &StandardDescriptorSetAllocator,
+        variables: Iter,
+    ) -> Result<Arc<Self>, RuntimeError> 
+    where 
+        Iter: IntoIterator<Item = Arc<dyn ShaderVariableAbstract>>,
+        Iter::IntoIter: ExactSizeIterator,
+    {
+        let variables  = HashMap::from_iter(variables
+            .into_iter()
+            .enumerate()
+            .map(|(bindings, variable)| {
+                (bindings as u32, variable)
+            })
+        );
 
-        builder = builder.vertex_shader(vertex_shader, ());
+        let descriptor_set = if !variables.is_empty() {
+            let descriptor_writes: Vec<_> = variables
+                .iter()
+                .map(|(&binding, variable)| {
+                    variable.write_descriptor(binding)
+                })
+                .collect();
 
-        if let Some((control_shader, evaluation_shaer)) = tessellation_shader {
-            builder = builder.tessellation_shaders(
-                control_shader, (), 
-                evaluation_shaer, ()
-            );
+            let layout = pipeline.layout().set_layouts().get(0).unwrap().clone();
+            let descriptor_set = match PersistentDescriptorSet::new(
+                allocator, 
+                layout, 
+                descriptor_writes
+            ) {
+                Ok(it) => it,
+                Err(e) => return Err(err!("Descriptor set creation failed: {}", e.to_string()))
+            };
+
+            Some(descriptor_set)
         }
-
-        if let Some(shader) = geometry_shader {
-            builder = builder.geometry_shader(shader, ());
-        }
-
-        builder = builder.fragment_shader(fragment_shader, ());
-
-        Ok(Arc::new(Self { 
-            pipeline: renderer.build_graphics_pipeline(builder)?
+        else {
+            None
+        };
+        
+        Ok(Arc::new(Self {
+            pipeline,
+            variables,
+            descriptor_set
         }))
     }
 
     #[inline]
-    pub fn create_descriptor_set(
-        &self,
-        renderer: &Renderer,
-        descriptor_writes: impl IntoIterator<Item = WriteDescriptorSet>,
-    ) -> Result<Arc<PersistentDescriptorSet>, RuntimeError> {
-        let layout = self.pipeline.layout().set_layouts()[0].clone();
-        renderer.create_descriptor_set(
-            layout, 
-            descriptor_writes
-        )
-    }
-
-    #[inline]
-    pub fn bind_pipeline_graphics<L, A: CommandBufferAllocator>(
-        &self, builder: &mut AutoCommandBufferBuilder<L, A>
+    pub unsafe fn bind_pipeline<L, A: CommandBufferAllocator>(
+        &self, 
+        command_buffer_builder: &mut AutoCommandBufferBuilder<L, A>
     ) {
-        builder.bind_pipeline_graphics(self.pipeline.clone());
+        command_buffer_builder.bind_pipeline_graphics(self.pipeline.clone());
     }
 
     #[inline]
-    pub fn bind_descriptor_sets<L, A: CommandBufferAllocator, S: DescriptorSetsCollection>(
+    pub unsafe fn bind_descriptor_set<L, A: CommandBufferAllocator>(
         &self,
-        first_set: u32,
-        descriptor_sets: S,
-        builder: &mut AutoCommandBufferBuilder<L, A>,
+        command_buffer_builder: &mut AutoCommandBufferBuilder<L, A>
     ) {
-        builder.bind_descriptor_sets(
-            PipelineBindPoint::Graphics, 
-            self.pipeline.layout().clone(), 
-            first_set, 
-            descriptor_sets
-        );
+        if let Some(descriptor_set) = &self.descriptor_set {
+            command_buffer_builder.bind_descriptor_sets(
+                PipelineBindPoint::Graphics, 
+                self.pipeline.layout().clone(), 
+                0, 
+                descriptor_set.clone()
+            );
+        }
     }
 
     #[inline]
-    pub fn push_constants<L, A: CommandBufferAllocator, Pc: BufferContents>(
+    pub unsafe fn push_constants<Pc, L, A>(
         &self, 
         offset: u32,
         push_constants: Pc,
-        builder: &mut AutoCommandBufferBuilder<L, A>
-    ) {
-        builder.push_constants(
+        command_buffer_builder: &mut AutoCommandBufferBuilder<L, A>
+    ) 
+    where
+        Pc: BufferContents,
+        A: CommandBufferAllocator,
+    {
+        command_buffer_builder.push_constants(
             self.pipeline.layout().clone(), 
             offset, 
             push_constants
         );
-    }
-
-    pub fn draw_models<'a>(
-        &self,
-        models: impl Iterator<Item = &'a Arc<Mutex<dyn DrawableModel>>>,
-        builder: &mut AutoCommandBufferBuilder<SecondaryAutoCommandBuffer>
-    ) -> Result<(), RuntimeError>{
-        for model in models {
-            let mut guard = model.lock().unwrap();
-            guard.prepare_drawing(self, builder)?;
-            guard.draw(self, builder)?;
-        }
-        Ok(())
     }
 }
